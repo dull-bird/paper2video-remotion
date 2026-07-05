@@ -2,22 +2,18 @@
 """
 Generate a Bilibili-compatible SRT subtitle file from the slide narrations
 and the rendered voiceover audio durations.
+
+Usage:
+    python3 scripts/generate-subtitles.py --deck=<slug>
 """
-import json
-import os
+import argparse
 import re
 import subprocess
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CONTENT_FILE = PROJECT_ROOT / "src" / "content" / "scaling-laws-carefully.ts"
-VOICEOVER_DIR = PROJECT_ROOT / "public" / "voiceover" / "scaling-laws-carefully"
-OUTPUT_SRT = PROJECT_ROOT / "out" / "scaling-laws-carefully.srt"
-
 
 def parse_slides(ts_source: str):
     """Extract slide id and narration from the TypeScript content file."""
-    # Match each slide object roughly, then pull id and narration.
     slide_blocks = re.findall(
         r"\{\s*id:\s*\"([^\"]+)\".*?narration:\s*\"((?:\\.|[^\"\\])*)\".*?\},?",
         ts_source,
@@ -51,7 +47,6 @@ def audio_duration(path: Path) -> float:
 
 def split_narration(text: str):
     """Split narration into subtitle chunks by sentence-ending punctuation."""
-    # Split on 。 ； ！ ？ but keep the punctuation.
     parts = re.split(r"([。；！？])", text)
     chunks = []
     current = ""
@@ -77,14 +72,27 @@ def format_srt_time(seconds: float) -> str:
 
 
 def main():
-    ts_source = CONTENT_FILE.read_text(encoding="utf-8")
+    parser = argparse.ArgumentParser(description="Generate Bilibili SRT subtitles for a deck.")
+    parser.add_argument(
+        "--deck",
+        default="scaling-laws-carefully",
+        help="Deck slug (matches src/content/<slug>.ts and public/voiceover/<slug>/).",
+    )
+    args = parser.parse_args()
+
+    project_root = Path(__file__).resolve().parent.parent
+    content_file = project_root / "src" / "content" / f"{args.deck}.ts"
+    voiceover_dir = project_root / "public" / "voiceover" / args.deck
+    output_srt = project_root / "out" / f"{args.deck}.srt"
+
+    ts_source = content_file.read_text(encoding="utf-8")
     slides = parse_slides(ts_source)
     if not slides:
-        raise RuntimeError("No slides found in content file")
+        raise RuntimeError(f"No slides found in {content_file}")
 
     durations = []
     for slide in slides:
-        audio_path = VOICEOVER_DIR / f"{slide['id']}.mp3"
+        audio_path = voiceover_dir / f"{slide['id']}.mp3"
         if not audio_path.exists():
             raise FileNotFoundError(f"Missing voiceover: {audio_path}")
         durations.append(audio_duration(audio_path))
@@ -113,9 +121,9 @@ def main():
             start = end
         cursor += dur
 
-    OUTPUT_SRT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT_SRT.write_text("\n".join(srt_entries).rstrip() + "\n", encoding="utf-8")
-    print(f"Wrote {index - 1} subtitle entries to {OUTPUT_SRT}")
+    output_srt.parent.mkdir(parents=True, exist_ok=True)
+    output_srt.write_text("\n".join(srt_entries).rstrip() + "\n", encoding="utf-8")
+    print(f"Wrote {index - 1} subtitle entries to {output_srt}")
 
 
 if __name__ == "__main__":

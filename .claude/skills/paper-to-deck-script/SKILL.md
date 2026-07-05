@@ -169,7 +169,7 @@ Example:
 Run the subtitle generator after voiceover is ready:
 
 ```bash
-python3 scripts/generate-subtitles.py
+python3 scripts/generate-subtitles.py --deck=<slug>
 # writes out/<slug>.srt
 ```
 
